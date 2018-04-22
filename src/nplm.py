@@ -7,7 +7,7 @@ import numpy as np
 import tensorflow as tf
 
 class NPLM(object):
-    def __init__(self, filename, window_size, hidden_size, word_embedding_size, learning_rate, step, batch_size):
+    def __init__(self, filename, window_size, hidden_size, word_embedding_size, learning_rate, step, batch_size, save_file):
         # 字典相关
         self.index = None
         self.count = None
@@ -30,7 +30,8 @@ class NPLM(object):
         self.U = None
         self.b2 = None
         # 结果
-        self.res = None
+        self.word_embedding = None
+        self.save_file = None
 
         with open(filename, "r") as file:
             text = file.read()
@@ -44,6 +45,7 @@ class NPLM(object):
         self.word_embedding_size = word_embedding_size
         self.step = step
         self.batch_size = batch_size
+        self.save_file = save_file
 
     def sum_target(self, y, index):
         res = tf.zeros([1])
@@ -72,7 +74,7 @@ class NPLM(object):
                 res = tf.add(res, tf.one_hot(i, self.batch_size, on_value = y_[i][target_word[i]]))
         with tf.name_scope('loss_function'):
             regulation = tf.nn.l2_loss(self.H) + tf.nn.l2_loss(self.U)
-            penalized_log_likelihood = -(tf.reduce_mean(tf.log(res)) + regulation)
+            penalized_log_likelihood = -(tf.reduce_mean(tf.log(res)) + 1e-5 * regulation)
             train = tf.train.GradientDescentOptimizer(self.learning_rate).minimize(penalized_log_likelihood)
         return train, penalized_log_likelihood
 
@@ -82,13 +84,14 @@ class NPLM(object):
             sess.run(tf.global_variables_initializer())
             for step in range(self.step):
                 sess.run(train)
-                print ("penalized_log_likelihood:", -sess.run(penalized_log_likelihood))
-            self.res = sess.run(self.C)
+                if step % 100 == 99:
+                  print ("Step #%d, penalized_log_likelihood: %f" % ((step + 1), sess.run(penalized_log_likelihood)))
+            self.word_embedding = sess.run(self.C)
 
     def save(self):
-        with open('Distributed-Word-Embedding\\data\\nlpm.txt', 'w') as f:
+        with open(self.save_file, 'w') as f:
             for i in range(self.vocabulary_size):
-                f.write(self.rdictionary[i] + ":" + str([x for x in self.res[i]]) + "\n")
+                f.write(self.rdictionary[i] + ":" + str([x for x in self.word_embedding[i]]) + "\n")
                 f.flush()
 
     def build_dataset(self, words):
@@ -136,6 +139,17 @@ class NPLM(object):
         
 
 if __name__ == "__main__":
-    nplm = NPLM("Distributed-Word-Embedding\\data\\text8", 10, 50, 20, 0.01, 100, 5)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-C', '--corpus', type=str, help="语料文件路径", required=True)
+    parser.add_argument('-WS', '--window-size', type=int, help="目标词所需的上文词数", default=10)
+    parser.add_argument('-HS', '--hidden-size', type=int, help="神经网络中隐藏层的大小", default=50)
+    parser.add_argument('-WES', '--word-embedding-size', type=int, help="词向量的大小", default=20)
+    parser.add_argument('-LR', '--learning-rate', type=float, help="学习速率", default=0.01)
+    parser.add_argument('-S', '--step', type=int, help="迭代次数", default=10000)
+    parser.add_argument('-BS', '--batch-size', type=int, help="批量生成数据的大小", default=50)
+    parser.add_argument('-SF', '--save-file', type=str, help="生成的词向量保存的位置", default="nplm.txt")
+    args = parser.parse_args()
+
+    nplm = NPLM(args.corpus, args.window_size, args.hidden_size, args.word_embedding_size, args.learning_rate, args.step, args.batch_size, args.save_file)
     nplm.test()
     nplm.save()
