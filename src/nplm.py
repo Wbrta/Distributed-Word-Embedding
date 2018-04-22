@@ -29,6 +29,8 @@ class NPLM(object):
         self.b1 = None
         self.U = None
         self.b2 = None
+        # 结果
+        self.res = None
 
         with open(filename, "r") as file:
             text = file.read()
@@ -65,12 +67,12 @@ class NPLM(object):
             self.b2 = tf.Variable(tf.constant(0.1, shape = [self.batch_size, self.vocabulary_size]))
             y_ = tf.nn.softmax(tf.add(tf.matmul(h, self.U), self.b2))   # shape = [batch_size, vocabulary_size]
         with tf.name_scope('index'):
+            res = tf.zeros([self.batch_size], dtype = tf.float32)
             for i in range(self.batch_size):
-                
-            
+                res = tf.add(res, tf.one_hot(i, self.batch_size, on_value = y_[i][target_word[i]]))
         with tf.name_scope('loss_function'):
             regulation = tf.nn.l2_loss(self.H) + tf.nn.l2_loss(self.U)
-            penalized_log_likelihood = -(tf.reduce_mean(tf.log()) + regulation)
+            penalized_log_likelihood = -(tf.reduce_mean(tf.log(res)) + regulation)
             train = tf.train.GradientDescentOptimizer(self.learning_rate).minimize(penalized_log_likelihood)
         return train, penalized_log_likelihood
 
@@ -80,10 +82,14 @@ class NPLM(object):
             sess.run(tf.global_variables_initializer())
             for step in range(self.step):
                 sess.run(train)
-                print ("penalized_log_likelihood:", sess.run(penalized_log_likelihood))
+                print ("penalized_log_likelihood:", -sess.run(penalized_log_likelihood))
+            self.res = sess.run(self.C)
 
     def save(self):
-        pass
+        with open('Distributed-Word-Embedding\\data\\nlpm.txt', 'w') as f:
+            for i in range(self.vocabulary_size):
+                f.write(self.rdictionary[i] + ":" + str([x for x in self.res[i]]) + "\n")
+                f.flush()
 
     def build_dataset(self, words):
         """
@@ -130,5 +136,6 @@ class NPLM(object):
         
 
 if __name__ == "__main__":
-    nplm = NPLM("text8", 10, 50, 20, 0.01, 100, 50)
+    nplm = NPLM("Distributed-Word-Embedding\\data\\text8", 10, 50, 20, 0.01, 100, 5)
     nplm.test()
+    nplm.save()
