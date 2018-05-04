@@ -17,6 +17,7 @@ class RNNLM(object):
             self.words = file.read().split()
         self.build_dataset(self.words)
         self.vocabulary_size = len(self.dictionary)
+        self.word_num = len(self.words)
     
     def build_dataset(self, words):
         self.count = [['UNK', -1]]
@@ -46,13 +47,22 @@ class RNNLM(object):
             self.W = tf.Variable(tf.random_normal(shape = [self.word_embedding_size, self.hidden_size], mean = 0.0, stddev = 0.1))
             self.U = tf.Variable(tf.random_normal(shape = [self.hidden_size, self.hidden_size], mean = 0.0, stddev = 0.1))
             self.V = tf.Variable(tf.random_normal(shape = [self.hidden_size, self.vocabulary_size], mean = 0.0, stddev = 0.1))
-            self.b1 = tf.Variable(tf.constant(0.1, shape = [1, self.hidden_size]))
             s = tf.Variable(tf.random_uniform([1, self.hidden_size], -1.0, 1.0))
-        for step in range(self.step):
-            for layer in range():
-                e = tf.nn.embedding_lookup(self.C, layer)
-                s = tf.add(tf.add(tf.matmul(e, self.W), tf.matmul(s, self.U)), self.b1)
-                y = tf.nn.softmax(tf.add(tf.matmul(s, self.V), self.b2))
+        with tf.Session() as sess:
+            sess.run(tf.global_variables_initializer())
+            for step in range(self.step):
+                loss = tf.zeros([1])
+                for layer in range(1, self.word_num):
+                    e = tf.nn.embedding_lookup(self.C, layer - 1)
+                    s = tf.nn.sigmoid(tf.matmul(e, self.W) + tf.matmul(s, self.U))
+                    y = tf.matmul(s, self.V)
+                    label = tf.one_hot(layer, self.vocabulary_size)
+                    loss = tf.add(loss, -tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=label, logits=y)))
+                train = tf.train.AdamOptimizer(self.learning_rate).minimize(loss)
+                sess.run(train)
+                if step % 100 == 99:
+                    print ("Step #%d, loss: %f\n" % ((step + 1), sess.run(loss)))
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
