@@ -1,3 +1,5 @@
+# -*- coding: utf8 -*-
+
 import math
 import argparse
 import collections
@@ -18,6 +20,7 @@ class RNNLM(object):
         self.build_dataset(self.words)
         self.vocabulary_size = len(self.dictionary)
         self.word_num = len(self.words)
+        self.word_embedding = None
     
     def build_dataset(self, words):
         self.count = [['UNK', -1]]
@@ -62,6 +65,13 @@ class RNNLM(object):
                 sess.run(train)
                 if step % 100 == 99:
                     print ("Step #%d, loss: %f\n" % ((step + 1), sess.run(loss)))
+            self.word_embedding = sess.run(self.C)
+    
+    def save(self):
+        with open(self.save_file, 'w', encoding = "utf8") as f:
+            for i in range(self.vocabulary_size):
+                f.write(self.rdictionary[i] + ":" + str([x for x in self.word_embedding[i]]) + "\n")
+                f.flush()
 
 
 if __name__ == "__main__":
@@ -78,3 +88,4 @@ if __name__ == "__main__":
 
     rnnlm = RNNLM()
     rnnlm.train()
+    rnnlm.save()
