@@ -7,8 +7,7 @@ import numpy as np
 import tensorflow as tf
 
 class RNNLM(object):
-    def __init__(self, corpus, window_size, hidden_size, word_embedding_size, learning_rate, step, save_file, threshold):
-        self.window_size = window_size
+    def __init__(self, corpus, hidden_size, word_embedding_size, learning_rate, step, save_file, threshold):
         self.hidden_size = hidden_size
         self.word_embedding_size = word_embedding_size
         self.learning_rate = learning_rate
@@ -56,7 +55,7 @@ class RNNLM(object):
             for step in range(self.step):
                 loss = tf.zeros([1])
                 for layer in range(1, self.word_num):
-                    e = tf.nn.embedding_lookup(self.C, layer - 1)
+                    e = tf.nn.embedding_lookup(self.C, [layer - 1])
                     s = tf.nn.sigmoid(tf.matmul(e, self.W) + tf.matmul(s, self.U))
                     y = tf.matmul(s, self.V)
                     label = tf.one_hot(layer, self.vocabulary_size)
@@ -77,7 +76,6 @@ class RNNLM(object):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-C', '--corpus', type=str, help="语料文件路径", required=True)
-    parser.add_argument('-WS', '--window-size', type=int, help="目标词所需的上文词数", default=10)
     parser.add_argument('-HS', '--hidden-size', type=int, help="神经网络中隐藏层的大小", default=50)
     parser.add_argument('-WES', '--word-embedding-size', type=int, help="词向量的大小", default=20)
     parser.add_argument('-LR', '--learning-rate', type=float, help="学习速率", default=0.01)
@@ -86,6 +84,6 @@ if __name__ == "__main__":
     parser.add_argument('-T', '--threshold', type=int, help="阈值，语料中的词出现次数少于此值的均设为<UNK>", default=5)
     args = parser.parse_args()
 
-    rnnlm = RNNLM()
+    rnnlm = RNNLM(args.corpus, args.hidden_size, args.word_embedding_size, args.learning_rate, args.step, args.save_file, args.threshold)
     rnnlm.train()
     rnnlm.save()
