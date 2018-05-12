@@ -147,7 +147,7 @@ if __name__ == "__main__":
     parser.add_argument('-LR', '--learning-rate', type=float, help="学习速率", default=0.01)
     parser.add_argument('-S', '--step', type=int, help="迭代次数", default=10000)
     parser.add_argument('-BS', '--batch-size', type=int, help="批量生成数据的大小", default=50)
-    parser.add_argument('-SF', '--save-file', type=str, help="生成的词向量保存的位置", default="nplm.txt")
+    parser.add_argument('-SF', '--save-file', type=str, help="生成的词向量保存的位置", default="data/nplm.txt")
     args = parser.parse_args()
 
     nplm = NPLM(args.corpus, args.window_size, args.hidden_size, args.word_embedding_size, args.learning_rate, args.step, args.batch_size, args.save_file)

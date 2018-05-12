@@ -51,10 +51,12 @@ class RNNLM(object):
             self.V = tf.Variable(tf.random_normal(shape = [self.hidden_size, self.vocabulary_size], mean = 0.0, stddev = 0.1))
             s = tf.Variable(tf.random_uniform([1, self.hidden_size], -1.0, 1.0))
         with tf.Session() as sess:
+            print ("Begin Train...")
             sess.run(tf.global_variables_initializer())
             for step in range(self.step):
                 loss = tf.zeros([1])
                 for layer in range(1, self.word_num):
+                    print ("layer:", layer)
                     e = tf.nn.embedding_lookup(self.C, [layer - 1])
                     s = tf.nn.sigmoid(tf.matmul(e, self.W) + tf.matmul(s, self.U))
                     y = tf.matmul(s, self.V)
@@ -62,8 +64,7 @@ class RNNLM(object):
                     loss = tf.add(loss, -tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=label, logits=y)))
                 train = tf.train.AdamOptimizer(self.learning_rate).minimize(loss)
                 sess.run(train)
-                if step % 100 == 99:
-                    print ("Step #%d, loss: %f\n" % ((step + 1), sess.run(loss)))
+                print ("Step #%d, loss: %f\n" % ((step + 1), sess.run(loss)))
             self.word_embedding = sess.run(self.C)
     
     def save(self):
@@ -75,12 +76,12 @@ class RNNLM(object):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('-C', '--corpus', type=str, help="语料文件路径", required=True)
+    parser.add_argument('-C', '--corpus', type=str, help="语料文件路径", default="Distributed-Word-Embedding/data/text8")
     parser.add_argument('-HS', '--hidden-size', type=int, help="神经网络中隐藏层的大小", default=50)
     parser.add_argument('-WES', '--word-embedding-size', type=int, help="词向量的大小", default=20)
     parser.add_argument('-LR', '--learning-rate', type=float, help="学习速率", default=0.01)
     parser.add_argument('-S', '--step', type=int, help="迭代次数", default=10000)
-    parser.add_argument('-SF', '--save-file', type=str, help="生成的词向量保存的位置", default="nplm.txt")
+    parser.add_argument('-SF', '--save-file', type=str, help="生成的词向量保存的位置", default="Distributed-Word-Embedding/data/rnnlm.txt")
     parser.add_argument('-T', '--threshold', type=int, help="阈值，语料中的词出现次数少于此值的均设为<UNK>", default=5)
     args = parser.parse_args()
 
