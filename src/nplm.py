@@ -7,58 +7,55 @@ import numpy as np
 import tensorflow as tf
 
 class NPLM(object):
+    """
+    神经网络概率语言模型
+    """
     def __init__(self, filename, window_size, hidden_size, word_embedding_size, learning_rate, step, batch_size, save_file):
-        # 字典相关
-        self.index = None
-        self.count = None
-        self.dictionary = None
-        self.rdictionary = None
-        # 模型参数相关
-        self.window_size = 0
-        self.hidden_size = 0
-        self.learning_rate = 0
-        self.vocabulary_size = 0
-        self.word_embedding_size = 0
-        # 批量数据
         self.cur = 0
-        self.step = 0
-        self.batch_size = 0
-        # 模型
-        self.C = None
-        self.H = None
-        self.b1 = None
-        self.U = None
-        self.b2 = None
-        # 结果
-        self.word_embedding = None
-        self.save_file = None
-
-        with open(filename, "r") as file:
-            text = file.read()
-        words = text.split()
-        self.build_dataset(words)
-        del text, words
+        self.step = step
+        self.save_file = save_file
+        self.batch_size = batch_size
         self.window_size = window_size
         self.hidden_size = hidden_size
         self.learning_rate = learning_rate
-        self.vocabulary_size = len(self.dictionary)
         self.word_embedding_size = word_embedding_size
-        self.step = step
-        self.batch_size = batch_size
-        self.save_file = save_file
+
+        with open(filename, "r") as file:
+            words = file.read().split()
+        self.words_number = len(words)
+        self.build_dataset(words)
+        del words
+        self.vocabulary_size = len(self.dictionary)
 
     def sum_target(self, y, index):
+        """
+        计算 y 的 （i, index[i]) 列之和
+
+        Args:
+            y: 一个 m * n 的集合
+            index: 列的集合
+        Return:
+            res[0]: y 的 (i, index[i]) 列之和
+        """
         res = tf.zeros([1])
         for inx in index:
             res = tf.add(res, y[inx])
         return res[0]
 
     def train(self):
-        words, target_word = self.generate_batch()
-        words = words.reshape([self.window_size * self.batch_size])
+        """
+        定义训练模型
+
+        Return:
+            train: 生成的梯度下降训练模型
+            penalized_log_likelihood: 惩罚对数似然，损失函数
+        """
+        words = tf.placeholder(dtype = tf.int32, shape = [self.batch_size, self.window_size])
+        target_word = tf.placeholder(dtype = tf.int32, shape = [self.batch_size])
         with tf.name_scope('input_layer'):
             self.C = tf.Variable(tf.random_uniform([self.vocabulary_size, self.word_embedding_size], -1.0, 1.0))
-            e = tf.nn.embedding_lookup(self.C, words)        # shape = [window_size * batch_size, word_embedding_size]
+            index = tf.reshape(words, shape = [self.window_size * self.batch_size])
+            e = tf.nn.embedding_lookup(self.C, index)        # shape = [window_size * batch_size, word_embedding_size]
             e = tf.reshape(e, shape = [self.batch_size, self.window_size * self.word_embedding_size])
         with tf.name_scope('hidden_layer'):
             self.H = tf.Variable(tf.truncated_normal(shape = [self.window_size * self.word_embedding_size, self.hidden_size], stddev = 1.0 / math.sqrt(self.word_embedding_size)))
@@ -76,22 +73,23 @@ class NPLM(object):
             regulation = tf.nn.l2_loss(self.H) + tf.nn.l2_loss(self.U)
             penalized_log_likelihood = -(tf.reduce_mean(tf.log(res)) + 1e-5 * regulation)
             train = tf.train.GradientDescentOptimizer(self.learning_rate).minimize(penalized_log_likelihood)
-        return train, penalized_log_likelihood
-
-    def test(self):
-        train, penalized_log_likelihood = self.train()
+        
         with tf.Session() as sess:
             sess.run(tf.global_variables_initializer())
             for step in range(self.step):
-                sess.run(train)
+                x, y = self.generate_batch()
+                sess.run(train, feed_dict = {words: x, target_word: y})
                 if step % 100 == 99:
-                  print ("Step #%d, penalized_log_likelihood: %f" % ((step + 1), sess.run(penalized_log_likelihood)))
+                  print ("Step #%d, penalized_log_likelihood: %f" % ((step + 1), sess.run(penalized_log_likelihood, feed_dict = {words: x, target_word: y})))
             self.word_embedding = sess.run(self.C)
 
     def save(self):
-        with open(self.save_file, 'w') as f:
-            for i in range(self.vocabulary_size):
-                f.write(self.rdictionary[i] + ":" + str([x for x in self.word_embedding[i]]) + "\n")
+        """
+        保存生成的词向量
+        """
+        with open(self.save_file, 'w', encoding = 'utf8') as f:
+            for word in self.dictionary:
+                f.write(word + ": " + str([x for x in self.word_embedding[self.dictionary[word]]]) + "\n")
                 f.flush()
 
     def build_dataset(self, words):
@@ -127,16 +125,15 @@ class NPLM(object):
             words: 返回一个包含多个窗口的语句，shape = [batch_size, window_size]
             target_word: 返回一个跟 words 相对应的目标词，shape = [batch_size]
         """
-        words = np.ndarray([self.batch_size, self.window_size], int)
-        target_word = np.ndarray([self.batch_size], int)
+        words = [[] for i in range(self.batch_size)]
+        target_word = [0 for i in range(self.batch_size)]
         for i in range(self.batch_size):
-            if self.cur + self.window_size >= self.vocabulary_size:
+            if self.cur + self.window_size >= self.words_number:
                 self.cur = 0
             words[i] = self.index[self.cur: self.cur + self.window_size]
             target_word[i] = self.index[self.cur + self.window_size]
             self.cur += 1
-        return words, target_word
-        
+        return np.array(words), np.array(target_word)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -151,5 +148,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     nplm = NPLM(args.corpus, args.window_size, args.hidden_size, args.word_embedding_size, args.learning_rate, args.step, args.batch_size, args.save_file)
-    nplm.test()
+    nplm.train()
     nplm.save()

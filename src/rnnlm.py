@@ -84,8 +84,8 @@ class RNNLM(object):
 
     def save(self):
         with open(self.save_file, 'w', encoding = 'utf8') as f:
-            for word, index in self.dictionary:
-                f.write(word + ": " + str([x for x in self.word_embedding[index]]))
+            for word in self.dictionary:
+                f.write(word + ": " + str([x for x in self.word_embedding[self.dictionary[word]]]) + "\n")
                 f.flush()
 
 if __name__ == "__main__":
