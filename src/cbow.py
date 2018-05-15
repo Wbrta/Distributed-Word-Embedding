@@ -65,7 +65,7 @@ class CBOW(object):
         
         with tf.Session() as sess:
             sess.run(tf.global_variables_initializer())
-            for epoch in self.epoches:
+            for epoch in range(self.epoches):
                 _x, _y = self.generate_batch()
                 sess.run(train, feed_dict = {x: _x, y: _y})
                 if epoch % 100 == 99:
