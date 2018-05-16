@@ -9,6 +9,7 @@ import tensorflow as tf
 
 class SkipGram(object):
     def __init__(self, corpus, vocabulary_size, batch_size, window_size, word_embedding_size, learning_rate, epoches, save_file):
+        self.cur = 0
         self.epoches = epoches
         self.batch_size = batch_size
         self.window_size = window_size
@@ -52,7 +53,7 @@ class SkipGram(object):
             x[i] = self.index[self.cur + self.window_size // 2]
             tmp[i].extend(self.index[self.cur: self.cur + self.window_size // 2])
             tmp[i].extend(self.index[self.cur + self.window_size // 2 + 1: self.cur + self.window_size])
-            cur += random.randint(1, self.batch_size)
+            self.cur += random.randint(1, self.batch_size)
         return x, generate_ones(tmp, self.vocabulary_size)
  
     def train(self):
@@ -71,7 +72,7 @@ class SkipGram(object):
         
         with tf.Session() as sess:
             sess.run(tf.global_variables_initializer())
-            for epoch in self.epoches:
+            for epoch in range(self.epoches):
                 x, y = self.generate_batch()
                 sess.run(optimizer, feed_dict = {inputs: x, labels: y})
                 if epoch % 100 == 99:
@@ -88,14 +89,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-C', '--corpus', type = str, help = "语料文件路径", required = True)
     parser.add_argument('-VS', '--vocabulary_size', type = int, help = "字典大小", default = 10000)
-    parser.add_argument('-BS', '--batch-size', type = int, help = "批量生成数据的大小", default = 50)
+    parser.add_argument('-BS', '--batch-size', type = int, help = "批量生成数据的大小", default = 25)
     parser.add_argument('-WS', '--window-size', type = int, help = "目标词所需的上下文词数", default = 10)
     parser.add_argument('-WES', '--word-embedding-size', type = int, help = "词向量的大小", default = 300)
     parser.add_argument('-LR', '--learning-rate', type = float, help = "学习速率", default = 0.01)
     parser.add_argument('-E', '--epoches', type = int, help="迭代次数", default = 10000)
     parser.add_argument('-SF', '--save-file', type = str, help="生成的词向量保存的位置", default="data/skip_gram.txt")
     args = parser.parse_args()
-
-    sg = SkipGram(args.corpus, args.window_size, args.word_embedding_size, args.learning_rate, args.step, args.batch_size, args.save_file)
+ 
+    sg = SkipGram(args.corpus, args.vocabulary_size, args.batch_size, args.window_size, args.word_embedding_size, args.learning_rate, args.epoches, args.save_file)
     sg.train()
     sg.save()
