@@ -27,21 +27,6 @@ class NPLM(object):
         del words
         self.vocabulary_size = len(self.dictionary)
 
-    def sum_target(self, y, index):
-        """
-        计算 y 的 （i, index[i]) 列之和
-
-        Args:
-            y: 一个 m * n 的集合
-            index: 列的集合
-        Return:
-            res[0]: y 的 (i, index[i]) 列之和
-        """
-        res = tf.zeros([1])
-        for inx in index:
-            res = tf.add(res, y[inx])
-        return res[0]
-
     def train(self):
         """
         定义训练模型
