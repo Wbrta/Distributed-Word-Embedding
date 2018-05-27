@@ -16,7 +16,7 @@ class CBOW(object):
         self.learning_rate = learning_rate
         self.vocabulary_size = vocabulary_size
         self.word_embedding_size = word_embedding_size
-        with open(corpus, 'r', encoding = 'utf8') as f:
+        with open(corpus, 'r') as f:
             words = f.read().split()
         self.word_number = len(words)
         self.build_dataset(words)
@@ -60,7 +60,7 @@ class CBOW(object):
             V = tf.Variable(tf.random_normal(shape = [self.word_embedding_size, self.vocabulary_size], mean = 0.0, stddev = 0.1))
             output = tf.matmul(h, V)
         with tf.name_scope('loss'):
-            loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=labels, logits=output))
+            loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=labels, logits=output))
             train = tf.train.AdamOptimizer(self.learning_rate).minimize(loss)
         
         with tf.Session() as sess:
@@ -73,9 +73,10 @@ class CBOW(object):
             self.word_embedding = sess.run(C)
 
     def save(self):
-        with open(self.save_file, 'w', encoding = 'utf8') as f:
+        with open(self.save_file, 'w') as f:
+            f.write(str(self.vocabulary_size) + " " + str(self.word_embedding_size) + "\n")
             for word in self.dictionary:
-                f.write(word + ": " + str([x for x in self.word_embedding[self.dictionary[word]]]) + "\n")
+                f.write(word + " " + " ".join(map(lambda x: str(x), self.word_embedding[self.dictionary[word]])) + "\n")
                 f.flush()
 
 if __name__ == "__main__":

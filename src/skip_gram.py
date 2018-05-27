@@ -8,15 +8,17 @@ import numpy as np
 import tensorflow as tf
 
 class SkipGram(object):
-    def __init__(self, corpus, vocabulary_size, batch_size, window_size, word_embedding_size, learning_rate, epoches, save_file):
+    def __init__(self, corpus, vocabulary_size, batch_size, window_size, word_embedding_size, learning_rate, epoches, save_file, num_skips, num_sampled):
         self.cur = 0
         self.epoches = epoches
+        self.num_skips = num_skips
         self.batch_size = batch_size
         self.window_size = window_size
+        self.num_sampled = num_sampled
         self.learning_rate = learning_rate
         self.vocabulary_size = vocabulary_size
         self.word_embedding_size = word_embedding_size
-        with open(corpus, 'r', encoding = 'utf8') as f:
+        with open(corpus, 'r') as f:
             words = f.read().split()
         self.word_number = len(words)
         self.build_dataset(words)
@@ -39,35 +41,41 @@ class SkipGram(object):
         self.count[0][1] = cont
     
     def generate_batch(self):
-        def generate_ones(batches, length):
-            y = [[0 for j in range(length)] for i in range(len(batches))]
-            for i in range(len(batches)):
-                for index in batches[i]:
-                    y[i][index] = 1
-            return y
-
-        x, tmp = [0 for i in range(self.batch_size)], [[] for i in range(self.batch_size)]
-        for i in range(self.batch_size):
-            if self.cur + self.window_size >= self.word_number:
-                self.cur = 0
-            x[i] = self.index[self.cur + self.window_size // 2]
-            tmp[i].extend(self.index[self.cur: self.cur + self.window_size // 2])
-            tmp[i].extend(self.index[self.cur + self.window_size // 2 + 1: self.cur + self.window_size])
-            self.cur += random.randint(1, self.batch_size)
-        return x, generate_ones(tmp, self.vocabulary_size)
+        batch = np.ndarray(shape = (self.batch_size), dtype = int)
+        labels = np.ndarray(shape = (self.batch_size, 1), dtype = int)
+        buffer = collections.deque(maxlen = self.window_size)
+        if self.cur + self.window_size > self.word_number:
+            self.cur = 0
+        buffer.extend(self.index[self.cur: self.cur + self.window_size])
+        self.cur += self.window_size
+        for i in range(self.batch_size // self.num_skips):
+            context_words = [w for w in range(self.window_size) if w != self.window_size // 2]
+            words_to_use = random.sample(context_words, self.num_skips)
+            for j, context_word in enumerate(words_to_use):
+                batch[i * self.num_skips + j] = buffer[self.window_size // 2]
+                labels[i * self.num_skips + j, 0] = buffer[context_word]
+            if self.cur == self.word_number:
+                buffer.extend(self.index[0: self.window_size])
+                self.cur = self.window_size
+            else:
+                buffer.append(self.index[self.cur])
+                self.cur += 1
+        self.cur = (self.cur + self.word_number - self.window_size) % self.word_number
+        return batch, labels
  
     def train(self):
-        with tf.name_scope('input_layer'):
+        with tf.name_scope('input'):
             inputs = tf.placeholder(dtype = tf.int32, shape = [self.batch_size])
-            labels = tf.placeholder(dtype = tf.int32, shape = [self.batch_size, self.vocabulary_size])
-        with tf.name_scope('embedding_layer'):
-            C = tf.Variable(tf.random_normal([self.vocabulary_size, self.word_embedding_size]))
+            labels = tf.placeholder(dtype = tf.int32, shape = [self.batch_size, 1])
+        with tf.name_scope('embedding'):
+            C = tf.Variable(tf.random_normal([self.vocabulary_size, self.word_embedding_size], -1.0, 1.0))
             e = tf.nn.embedding_lookup(C, inputs)
-        with tf.name_scope('output_layer'):
-            V = tf.Variable(tf.random_normal(shape = [self.word_embedding_size, self.vocabulary_size], mean = 0.0, stddev = 1 / math.sqrt(self.word_embedding_size)))
-            outputs = tf.matmul(e, V)
+        with tf.name_scope('weights'):
+            nec_weights = tf.Variable(tf.truncated_normal([self.vocabulary_size, self.word_embedding_size], stddev = 1.0 / math.sqrt(self.word_embedding_size)))
+        with tf.name_scope('biases'):
+            nce_biases = tf.Variable(tf.zeros([self.vocabulary_size]))
         with tf.name_scope('loss'):
-            loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits = outputs, labels = labels))
+            loss = tf.reduce_mean(tf.nn.nce_loss(weights = nec_weights, biases = nce_biases, labels = labels, inputs = e, num_sampled = self.num_sampled, num_classes = self.vocabulary_size))
             optimizer = tf.train.GradientDescentOptimizer(self.learning_rate).minimize(loss)
         
         with tf.Session() as sess:
@@ -75,14 +83,15 @@ class SkipGram(object):
             for epoch in range(self.epoches):
                 x, y = self.generate_batch()
                 sess.run(optimizer, feed_dict = {inputs: x, labels: y})
-                if epoch % 100 == 99:
-                    print ("Epoch #%d, loss:" % (epoch + 1), sess.run(loss, feed_dict = {inputs: x, labels: y}))
+                if epoch % 1000 == 999:
+                    print ("Epoch #%d, loss: %f" % ((epoch + 1), sess.run(loss, feed_dict = {inputs: x, labels: y})))
             self.word_embedding = sess.run(C)
 
     def save(self):
-        with open(self.save_file, 'w', encoding = 'utf8') as f:
+        with open(self.save_file, 'w') as f:
+            f.write(str(self.vocabulary_size) + " " + str(self.word_embedding_size) + "\n")
             for word in self.dictionary:
-                f.write(word + ": " + str([x for x in self.word_embedding[self.dictionary[word]]]) + "\n")
+                f.write(word + " " + " ".join(map(lambda x: str(x), self.word_embedding[self.dictionary[word]])) + "\n")
                 f.flush()
     
 if __name__ == "__main__":
@@ -95,8 +104,10 @@ if __name__ == "__main__":
     parser.add_argument('-LR', '--learning-rate', type = float, help = "学习速率", default = 0.01)
     parser.add_argument('-E', '--epoches', type = int, help="迭代次数", default = 10000)
     parser.add_argument('-SF', '--save-file', type = str, help="生成的词向量保存的位置", default="data/skip_gram.txt")
+    parser.add_argument('-NS', '--num-skips', type = int, help = "利用输入多少次以生成 label", default = 2)
+    parser.add_argument('-NSD', '--num-sampled', type = int, help = "负采样的数目", default = 64)
     args = parser.parse_args()
  
-    sg = SkipGram(args.corpus, args.vocabulary_size, args.batch_size, args.window_size, args.word_embedding_size, args.learning_rate, args.epoches, args.save_file)
+    sg = SkipGram(args.corpus, args.vocabulary_size, args.batch_size, args.window_size, args.word_embedding_size, args.learning_rate, args.epoches, args.save_file, args.num_skips, args.num_sampled)
     sg.train()
     sg.save()
